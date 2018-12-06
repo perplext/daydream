@@ -1,36 +1,46 @@
-import cssPath from 'css-path'
-import each from 'component-each'
+import Selector from 'css-selector-generator'
 
-detect('click')
-detect('keydown')
-detect('copy')
+const selector = new Selector()
 
-function detect (listener) {
-  if (listener === 'copy') return copyText()
+class EventRecorder {
+  start () {
+    const typeableElements = document.querySelectorAll('input, textarea')
+    const clickableElements = document.querySelectorAll('a, button')
 
-  const els = document.querySelectorAll('body')
-  each(els, function (el) {
-    el.addEventListener(listener, function (event) {
-      if (listener === 'click') handle('click', event.target)
-      if (listener === 'keydown' && event.keyCode === 9) handle('type', event.target)
-    })
-  })
-};
+    for (let i = 0; i < typeableElements.length; i++) {
+      typeableElements[i].addEventListener('keydown', this.handleKeydown)
+    }
 
-function copyText () {
-  window.onkeydown = function (event) {
-    if (event.keyCode === 67 && event.ctrlKey) {
-      const selObj = window.getSelection()
-      handle('evaluate', selObj.focusNode)
+    for (let i = 0; i < clickableElements.length; i++) {
+      clickableElements[i].addEventListener('click', this.handleClick)
     }
   }
-};
 
-function handle (event, node) {
-  if (chrome && chrome.runtime) {
-    const path = cssPath(node)
-    const message = [event, path]
-    message.push(node.value)
-    chrome.runtime.sendMessage(message)
+  handleKeydown (e) {
+    if (e.keyCode !== 9) {
+      return
+    }
+    sendMessage(e)
   }
-};
+
+  handleClick (e) {
+    if (e.target.href) {
+      chrome.runtime.sendMessage({
+        action: 'url',
+        value: e.target.href
+      })
+    }
+    sendMessage(e)
+  }
+}
+
+function sendMessage (e) {
+  chrome.runtime.sendMessage({
+    selector: selector.getSelector(e.target),
+    value: e.target.value,
+    action: e.type
+  })
+}
+
+const eventRecorder = new EventRecorder()
+eventRecorder.start()
